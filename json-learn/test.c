@@ -135,6 +135,17 @@ static void test_parse_number_too_big()
 	TEST_ERROR(SCARB_PARSE_NUMBER_TOO_BIG, "-1e309");
 }
 
+static void test_access_string()
+{
+	scarb_value v;
+	scarb_init(&v);
+	scarb_set_string(*v, "", 0);
+	EXPECT_EQ_STRING("", scarb_get_string(&v), scarb_get_string_length(&v));
+	scarb_set_string(&v, "Hello", 5);
+	EXPECT_EQ_STRING("Hello", scarb_get_string(&v), scarb_get_string_length(&v));
+	scarb_free(&v);
+}
+
 static void test_parse()
 {
 	test_parse_null();

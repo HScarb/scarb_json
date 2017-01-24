@@ -3,17 +3,50 @@
 #include <errno.h>		// errno, ERANGE
 #include <math.h>		// HUGE_VAL
 #include <stdlib.h>		// NULL,strtod
+#include <string.h>		// memcpy()
+
+#ifndef SCARB_PARSE_STACK_INIT_SIZE
+#define SCARB_PARSE_STACK_INIT_SIZE 256
+#endif					// 使用者可在编译选项中自行设置宏，没设置的话就用缺省值。
 
 // *c->json != ch, report error, else c->json++
-#define EXPECT(c, ch)		do{ assert(*c->json == (ch)); c->json++; } while(0)
+#define EXPECT(c, ch)		do { assert(*c->json == (ch)); c->json++; } while(0)
 #define ISDIGIT(ch)			((ch) >= '0' && (ch) <= '9')
 #define ISDIGIT1TO9(ch)		((ch) >= '1' && (ch) <= '9')
+#define PUTC(c, ch)			do { *(char*)scarb_context_push(c, sizeof(char)) = (ch); } while(0)
 
 /* 为了减少解析函数之间传递多个参数,把这些数据都放进一个结构体 */
 typedef struct
 {
 	const char * json;
+	// 动态堆栈
+	char * stack;
+	size_t size, top;
 }scarb_context;
+
+// 动态堆栈操作
+static void* scarb_context_push(scarb_context* c, size_t size)
+{
+	void *ret;
+	assert(size > 0);
+	if(c->top + size >= c->size)			// 压入时空间不足
+	{
+		if (c->size == 0)
+			c->size = SCARB_PARSE_STACK_INIT_SIZE;
+		while (c->top + size >= c->size)	// 回以1.5倍大小扩展
+			c->size += c->size >> 1;		// c->size * 1.5
+		c->stack = (char*)realloc(c->stack, c->size);	// 用realloc重新分配内存 realloc(NULL, size) = malloc(size)
+	}
+	ret = c->stack + c->top;
+	c->top += size;
+	return ret;
+}
+
+static void* scarb_context_pop(scarb_context* c, size_t size)
+{
+	assert(c->top >= size);
+	return c->stack + (c->top -= size);
+}
 
 /*
 	解析空白，
@@ -113,15 +146,41 @@ static int scarb_parse_number(scarb_context* c, scarb_value* v)
 	return SCARB_PARSE_OK;
 }
 
-static int scarb_parse_value(scarb_context* c, scarb_value*v)
+static int scarb_parse_string(scarb_context* c, scarb_value* v)
+{
+	size_t head = c->top, len;
+	const char* p;
+	EXPECT(c, '\"');
+	p = c->json;
+	for (;;)
+	{
+		char ch = *p++;
+		switch(ch)
+		{
+		case'\"':
+			len = c->top - head;
+			scarb_set_string(v, (const char*)scarb_context_pop(c, len), len);
+			c->json = p;
+			return SCARB_PARSE_OK;
+		case '\0':
+			c->top = head;
+			return SCARB_PARSE_MISS_QUOTAION_MARK;
+		default:
+			PUTC(c, ch);
+		}
+	}
+}
+
+static int scarb_parse_value(scarb_context* c, scarb_value* v)
 {
 	switch(*c->json)
 	{
-	case 't':return scarb_parse_literal(c, v, "true", SCARB_TRUE);
-	case 'f':return scarb_parse_literal(c, v, "false", SCARB_FALSE);
-	case 'n':return scarb_parse_literal(c, v, "null", SCARB_NULL);
-	default:return scarb_parse_number(c, v);
-	case '\0':return SCARB_PARSE_EXPECT_VALUE;
+	case 't':	return scarb_parse_literal(c, v, "true", SCARB_TRUE);
+	case 'f':	return scarb_parse_literal(c, v, "false", SCARB_FALSE);
+	case 'n':	return scarb_parse_literal(c, v, "null", SCARB_NULL);
+	default:	return scarb_parse_number(c, v);
+	case '"':	return scarb_parse_string(c, v);
+	case '\0':	return SCARB_PARSE_EXPECT_VALUE;
 	}
 }
 
@@ -131,7 +190,9 @@ int scarb_parse(scarb_value* v, const char* json)
 	int ret;						// 返回值
 	assert(v != NULL);				// 确认v不是NULL
 	c.json = json;					// 将值传入context
-	v->type = SCARB_NULL;			// 若失败，会把v设置为NULL类型，所以这里先设为NULL
+	c.stack = NULL;
+	c.size = c.top = 0;
+	scarb_init(v);					// 若失败，会把v设置为NULL类型，所以这里先设为NULL
 	scarb_parse_whitespace(&c);	
 	if((ret = scarb_parse_value(&c, v)) == SCARB_PARSE_OK)
 	{
@@ -142,18 +203,59 @@ int scarb_parse(scarb_value* v, const char* json)
 			ret = SCARB_PARSE_ROOT_NOT_SINGULAR;
 		}
 	}
+	assert(c.top == 0);				// 释放时 确保所有数据都被弹出
+	free(c.stack);					// 释放栈
 	return ret;
 }
 
-/** getter **/
+void scarb_free(scarb_value* v)
+{
+	assert(v != NULL);
+	if (v->type == SCARB_STRING)
+		free(v->s.s);
+	v->type = SCARB_NULL;
+}
+
+/** getter seeter **/
 scarb_type scarb_get_type(const scarb_value* v)
 {
 	assert(v != NULL);
 	return v->type;
 }
 
+int scarb_get_boolean(const scarb_value* v)
+{
+}
+
+void scarb_set_boolean(scarb_value* v, int b)
+{
+}
+
 double scarb_get_number(const scarb_value* v)
 {
 	assert(v != NULL && v->type == SCARB_NUMBER);		// 仅当type==NULBER时，n才表示json数字的数值
 	return v->n;
+}
+
+void scarb_set_number(scarb_value* v, double n)
+{
+}
+
+const char* scarb_get_string(const scarb_value* v)
+{
+}
+
+size_t scarb_get_string_length(const scarb_value* v)
+{
+}
+
+void scarb_set_string(scarb_value* v, const char* s, size_t len)
+{
+	assert(v != NULL && (s != NULL || len == 0));		// 非空指针或者零长度的字符串均合法
+	scarb_free(v);										// 设置之前先清空v可能分配到的内存
+	v->s.s = (char*)malloc(len + 1);					// +1 : 结尾空字符
+	memcpy(v->s.s, s, len);
+	v->s.s[len] = '\0';
+	v->s.len = len;
+	v->type = SCARB_STRING;
 }

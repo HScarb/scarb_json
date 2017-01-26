@@ -181,6 +181,7 @@ static int scarb_parse_string(scarb_context* c, scarb_value* v)
 				c->top = head;
 				return SCARB_PARSE_INVALID_STRING_ESCAPE;
 			}
+			break;
 		case '\0':							// Æ¥Åä×Ö·û´®½áÎ²×Ö·û
 			c->top = head;
 			return SCARB_PARSE_MISS_QUOTATION_MARK;

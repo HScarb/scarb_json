@@ -118,10 +118,8 @@ static void test_parse_string()
 {
 	TEST_STRING("", "\"\"");
 	TEST_STRING("Hello", "\"Hello\"");
-#if 0
 	TEST_STRING("Hello\nWorld", "\"Hello\\nWorld\"");
 	TEST_STRING("\" \\ / \b \f \n \r \t", "\"\\\" \\\\ \\/ \\b \\f \\n \\r \\t\"");
-#endif
 }
 
 /* 测试相应错误类型的宏，error为要测试的错误，json为测试的json值 */

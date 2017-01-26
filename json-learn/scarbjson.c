@@ -150,9 +150,22 @@ static int scarb_parse_number(scarb_context* c, scarb_value* v)
 	return SCARB_PARSE_OK;
 }
 
+static const char* scarb_parse_hex4(const char* p, unsigned* u)
+{
+	return p;
+}
+
+static void scarb_encode_utf8(scarb_context* c, unsigned u)
+{
+	
+}
+
+#define STRING_ERROR(ret) do { c->top = head; return ret; } while(0)
+
 static int scarb_parse_string(scarb_context* c, scarb_value* v)
 {
 	size_t head = c->top, len;
+	unsigned u;
 	const char* p;
 	EXPECT(c, '\"');						// 匹配第一个"
 	p = c->json;
@@ -177,20 +190,20 @@ static int scarb_parse_string(scarb_context* c, scarb_value* v)
 			case 'n': PUTC(c, '\n'); break;
 			case 'r': PUTC(c, '\r'); break;
 			case 't': PUTC(c, '\t'); break;
+			case 'u':
+				if (!(p = scarb_parse_hex4(p, &u)))
+					STRING_ERROR(SCARB_PARSE_INVALID_UNICODE_HEX);
+				// TODO
+				scarb_encode_utf8(c, u);
 			default:
-				c->top = head;
-				return SCARB_PARSE_INVALID_STRING_ESCAPE;
+				STRING_ERROR(SCARB_PARSE_INVALID_STRING_ESCAPE);
 			}
 			break;
 		case '\0':							// 匹配字符串结尾字符
-			c->top = head;
-			return SCARB_PARSE_MISS_QUOTATION_MARK;
+			STRING_ERROR(SCARB_PARSE_MISS_QUOTATION_MARK);
 		default:
-			if((unsigned char)ch < 0x20)	// 处理不合法的字符串
-			{
-				c->top = head;
-				return SCARB_PARSE_INVALID_STRING_CHAR;
-			}
+			if ((unsigned char)ch < 0x20)	// 处理不合法的字符串
+				STRING_ERROR(SCARB_PARSE_INVALID_STRING_CHAR);
 			PUTC(c, ch);
 		}
 	}

@@ -1,3 +1,7 @@
+#ifdef _WINDOWS
+#define _CRTDBG_MAP_ALLOC		// 在 Windows 下，可使用 Visual C++ 的 CRT 检测内存泄漏
+#include <crtdbg.h>
+#endif
 #include "scarbjson.h"
 #include <assert.h>		// assert()
 #include <errno.h>		// errno, ERANGE
@@ -150,21 +154,21 @@ static int scarb_parse_string(scarb_context* c, scarb_value* v)
 {
 	size_t head = c->top, len;
 	const char* p;
-	EXPECT(c, '\"');
+	EXPECT(c, '\"');						// 匹配第一个"
 	p = c->json;
 	for (;;)
 	{
 		char ch = *p++;
 		switch(ch)
 		{
-		case'\"':
+		case'\"':							// 匹配第二个"
 			len = c->top - head;
 			scarb_set_string(v, (const char*)scarb_context_pop(c, len), len);
 			c->json = p;
 			return SCARB_PARSE_OK;
-		case '\0':
+		case '\0':							// 匹配字符串结尾字符
 			c->top = head;
-			return SCARB_PARSE_MISS_QUOTAION_MARK;
+			return SCARB_PARSE_MISS_QUOTATION_MARK;
 		default:
 			PUTC(c, ch);
 		}
@@ -225,10 +229,14 @@ scarb_type scarb_get_type(const scarb_value* v)
 
 int scarb_get_boolean(const scarb_value* v)
 {
+	assert(v != NULL && (v->type == SCARB_TRUE || v->type == SCARB_FALSE));
+	return v->type == SCARB_TRUE;
 }
 
 void scarb_set_boolean(scarb_value* v, int b)
 {
+	scarb_free(v);
+	v->type = b ? SCARB_TRUE : SCARB_FALSE;
 }
 
 double scarb_get_number(const scarb_value* v)
@@ -239,14 +247,21 @@ double scarb_get_number(const scarb_value* v)
 
 void scarb_set_number(scarb_value* v, double n)
 {
+	scarb_free(v);
+	v->n = n;
+	v->type = SCARB_NUMBER;
 }
 
 const char* scarb_get_string(const scarb_value* v)
 {
+	assert(v != NULL && v->type == SCARB_STRING);
+	return v->s.s;
 }
 
 size_t scarb_get_string_length(const scarb_value* v)
 {
+	assert(v != NULL && v->type == SCARB_STRING);
+	return v->s.len;
 }
 
 void scarb_set_string(scarb_value* v, const char* s, size_t len)

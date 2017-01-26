@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stddef.h>		// size_t
+
 typedef enum { SCARB_NULL, SCARB_FALSE, SCARB_TRUE, SCARB_NUMBER, SCARB_STRING, SCARB_ARRAY, SCARB_OBJECT} scarb_type;
 
 // JSON的数据结构

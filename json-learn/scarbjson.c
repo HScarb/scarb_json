@@ -166,10 +166,30 @@ static int scarb_parse_string(scarb_context* c, scarb_value* v)
 			scarb_set_string(v, (const char*)scarb_context_pop(c, len), len);
 			c->json = p;
 			return SCARB_PARSE_OK;
+		case '\\':
+			switch (*p++)
+			{
+			case '\"': PUTC(c, '\"'); break;
+			case '\\': PUTC(c, '\\'); break;
+			case '/': PUTC(c, '/'); break;
+			case 'b': PUTC(c, '\b'); break;
+			case 'f': PUTC(c, '\f'); break;
+			case 'n': PUTC(c, '\n'); break;
+			case 'r': PUTC(c, '\r'); break;
+			case 't': PUTC(c, '\t'); break;
+			default:
+				c->top = head;
+				return SCARB_PARSE_INVALID_STRING_ESCAPE;
+			}
 		case '\0':							// Æ¥Åä×Ö·û´®½áÎ²×Ö·û
 			c->top = head;
 			return SCARB_PARSE_MISS_QUOTATION_MARK;
 		default:
+			if((unsigned char)ch < 0x20)	// ´¦Àí²»ºÏ·¨µÄ×Ö·û´®
+			{
+				c->top = head;
+				return SCARB_PARSE_INVALID_STRING_CHAR;
+			}
 			PUTC(c, ch);
 		}
 	}
